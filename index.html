@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>YiayiaOS v7.1: Matiasma Protocol</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Special+Elite&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        :root { 
+            --neon-blue: #00f2ff; --gold: #ffd700; --alert: #ff2222; 
+            --lace: #e0e0e0; --void: #020213;
+        }
+        body { margin: 0; overflow: hidden; background: var(--void); font-family: 'Press Start 2P', cursive; }
+        
+        #cctv-overlay { 
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
+            background: radial-gradient(circle, transparent 55%, #000 110%);
+            pointer-events: none; z-index: 90; opacity: 0.5; 
+            box-shadow: inset 0 0 100px rgba(0,0,0,0.9);
+            transition: background-color 0.2s;
+        }
+
+        /* CURSE PULSE (RED) */
+        #curse-pulse {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 20%, rgba(255, 0, 0, 0.6) 100%);
+            opacity: 0; z-index: 80; pointer-events: none; transition: opacity 0.1s;
+        }
+
+        /* PROTECT PULSE (GOLD) - NEW */
+        #protect-pulse {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 20%, rgba(255, 215, 0, 0.4) 100%);
+            opacity: 0; z-index: 81; pointer-events: none; transition: opacity 0.1s;
+        }
+
+        /* --- DOILY UI AESTHETIC --- */
+        .hud-panel {
+            position: absolute; z-index: 100; 
+            background: rgba(0, 10, 20, 0.85); 
+            color: var(--neon-blue);
+            padding: 15px; 
+            border: 4px dotted var(--lace);
+            box-shadow: 0 0 0 4px rgba(0,0,0,0.5), inset 0 0 20px var(--neon-blue);
+            border-radius: 8px;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .hud-panel::before, .hud-panel::after {
+            content: '+'; position: absolute; color: var(--lace); font-size: 20px; font-family: 'Special Elite';
+        }
+        .hud-panel::before { top: -14px; left: -6px; }
+        .hud-panel::after { bottom: -14px; right: -6px; }
+
+        /* --- MATIASMA METER --- */
+        #meter-container {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            width: 320px; height: 24px; 
+            border: 4px double var(--lace);
+            background: #220000; z-index: 110; 
+            display: flex; align-items: center; justify-content: flex-start;
+        }
+        #meter-fill {
+            height: 100%; width: 50%; 
+            background: linear-gradient(90deg, var(--alert), var(--gold), var(--neon-blue));
+            box-shadow: 0 0 15px var(--neon-blue);
+            transition: width 0.1s linear;
+        }
+        #meter-label {
+            position: absolute; width: 100%; text-align: center; top: 30px;
+            color: white; font-size: 10px; text-shadow: 0 2px 0 #000; letter-spacing: 2px;
+        }
+        .meter-marker { position: absolute; top: -5px; bottom: -5px; width: 2px; background: white; z-index: 112; }
+
+        /* --- CRASH SCREEN --- */
+        #crash-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 200;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            color: var(--alert); text-align: center; opacity: 0; pointer-events: none; transition: opacity 0.5s;
+        }
+        .blink-text { animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* --- UI POSITIONS --- */
+        #ui-top-left { top: 30px; left: 30px; width: auto; max-width: 240px; }
+        #ui-bottom-right { bottom: 30px; right: 30px; width: auto; max-width: 280px; }
+        #ui-bottom-left { 
+            bottom: 30px; left: 30px; width: 350px; height: 160px; 
+            display: flex; flex-direction: column-reverse; 
+            border-top: 4px dotted var(--lace); 
+            font-family: 'Special Elite', cursive; overflow: hidden;
+        }
+
+        /* STATES */
+        .mode-cursed { border-color: var(--alert); color: var(--alert); box-shadow: inset 0 0 30px var(--alert); }
+        .mode-protect { border-color: var(--gold); color: var(--gold); box-shadow: inset 0 0 30px var(--gold); }
+        .mode-cleanse { border-color: var(--white); color: var(--white); box-shadow: inset 0 0 50px var(--white); }
+        .mode-dead { filter: grayscale(100%) brightness(0.3); border-color: #333; }
+
+        .instruction-row { display: flex; align-items: center; margin-bottom: 12px; color: rgba(255,255,255,0.4); font-size: 10px; transition: 0.3s; }
+        .instruction-row.active { color: #fff; transform: scale(1.05) translateX(5px); text-shadow: 0 0 10px currentColor; }
+        .material-icons { font-size: 20px; margin-right: 12px; }
+
+        .log-entry { margin-top: 4px; font-size: 14px; border-bottom: 1px dashed rgba(255,255,255,0.1); padding-bottom: 2px;}
+        .log-curse { color: var(--alert); font-weight: bold; }
+        .log-sys { color: var(--gold); font-style: italic; }
+
+        #input_video { display: none; }
+        
+        #hidden-settings {
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 300px; background: #000; border: 4px double var(--neon-blue);
+            z-index: 999; padding: 20px; color: var(--neon-blue); font-family: 'Special Elite';
+        }
+        .setting-row { margin: 10px 0; display: flex; justify-content: space-between; align-items: center; }
+
+        @media (max-width: 600px) {
+            #ui-top-left { top: 10px; left: 10px; transform: scale(0.8); transform-origin: top left; }
+            #ui-bottom-right { bottom: 10px; right: 10px; transform: scale(0.8); transform-origin: bottom right; }
+            #ui-bottom-left { bottom: 10px; left: 10px; width: 60%; transform: scale(0.8); transform-origin: bottom left; }
+            #meter-container { width: 80%; transform: translateX(-50%) scale(0.8); top: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="cctv-overlay"></div>
+    <div id="curse-pulse"></div>
+    <div id="protect-pulse"></div>
+
+    <div id="meter-container">
+        <div class="meter-marker" style="left: 0%"></div>
+        <div class="meter-marker" style="left: 50%; opacity: 0.5"></div>
+        <div class="meter-marker" style="left: 100%"></div>
+        <div id="meter-fill"></div>
+        <div id="meter-label">CURSED <span style="margin:0 20px">---</span> PROTECTED</div>
+    </div>
+
+    <div id="crash-screen">
+        <h1 class="blink-text" style="font-size: 40px; margin-bottom: 20px; color:red">SYSTEM FAILURE</h1>
+        <p style="font-family: 'Special Elite'; font-size: 20px; color: white;">TOO MUCH 'MATIASMA'</p>
+        <p style="color: var(--neon-blue); margin-top: 30px;">PERFORM "MOUTZA" TO REBOOT</p>
+    </div>
+
+    <div id="ui-top-left" class="hud-panel">
+        <div style="font-size:10px; margin-bottom: 5px; opacity: 0.8;">YIAYIA_OS v7.1</div>
+        <div id="status-text" style="font-size:16px; line-height: 1.4;">SYSTEM READY</div>
+    </div>
+
+    <div id="ui-bottom-right" class="hud-panel">
+        <div class="instruction-row" id="inst-4"><span class="material-icons">thumb_up</span>SHIELDS (14)</div>
+        <div class="instruction-row" id="inst-2"><span class="material-icons">pan_tool</span>MOUTZA (FIX)</div>
+        <div class="instruction-row" id="inst-3"><span class="material-icons">back_hand</span>MIRROR</div>
+        <div class="instruction-row" id="inst-1"><span class="material-icons">pinch</span>CURSE</div>
+    </div>
+
+    <div id="ui-bottom-left" class="hud-panel"></div>
+
+    <div id="hidden-settings">
+        <h2>YIAYIA CONFIG</h2>
+        <div class="setting-row"><span>Decay:</span><input type="range" min="0" max="0.5" step="0.01" id="p-decay"></div>
+        <div class="setting-row"><span>Heal:</span><input type="range" min="0.1" max="2.0" step="0.1" id="p-heal"></div>
+        <div style="text-align: center; margin-top:10px; font-size: 10px;">(Press 'H' to Close)</div>
+    </div>
+
+    <video id="input_video" playsinline></video>
+
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } } </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        const CONFIG = { decay: 0.05, heal: 0.8, curse: 1.2, particleCount: 18000 };
+        const STATE = { IDLE: 0, CURSED: 1, CLEANSE: 2, MIRROR: 3, PROTECT: 4 };
+        
+        const IDLE_THREATS = [
+            "AUNTIE ASKED WHEN YOU WILL MARRY", "SOMEONE SAID YOU GAINED WEIGHT",
+            "NEIGHBOR EYEING YOUR NEW CAR", "THEY SAID 'GOOD LUCK' SARCASTICALLY",
+            "INSTAGRAM POST GOT TOO MANY LIKES"
+        ];
+        
+        const LOGS = {
+            CURSE: ["KAKO MATI!", "TOXICITY RISING", "THEY ARE WATCHING"],
+            CLEANSE: ["FTOU FTOU!", "CLEANSED", "SKORDA (GARLIC)"],
+            PROTECT: ["SHIELDS MAX", "DIVINE PROTECTION"]
+        };
+
+        let scene, camera, renderer, eyeSystem, skySystem, mirrorObj;
+        let currentState = STATE.IDLE;
+        let eyePos, eyeBasePos, eyeCol, eyeBaseCol, subEyeOffsets = [], eyeExplosionDir;
+        let curseFactor = 0, cleanseFactor = 0, mirrorFactor = 0, protectFactor = 0;
+        let targetRotation = { x: 0, y: 0 }, subEyeCenters = [];
+        
+        let matiasmaLevel = 50; 
+        let isDead = false;
+        let protectTimer = 0; // Duration of gold pulse when reaching 100%
+
+        function getCircleSprite() {
+            const canvas = document.createElement('canvas'); canvas.width = 32; canvas.height = 32;
+            const ctx = canvas.getContext('2d');
+            const grad = ctx.createRadialGradient(16,16,0, 16,16,16);
+            grad.addColorStop(0, 'rgba(255,255,255,1)'); grad.addColorStop(0.5, 'rgba(255,255,255,0.2)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad; ctx.fillRect(0,0,32,32); return new THREE.CanvasTexture(canvas);
+        }
+
+        function log(msg, type = 'normal') {
+            const container = document.getElementById('ui-bottom-left');
+            const d = document.createElement('div');
+            d.className = 'log-entry';
+            if(type === 'curse') d.classList.add('log-curse');
+            if(type === 'sys') d.classList.add('log-sys');
+            d.innerHTML = `> ${msg}`;
+            container.prepend(d);
+            if(container.children.length > 5) container.removeChild(container.lastChild);
+        }
+
+        function triggerCrash() {
+            if(isDead) return;
+            isDead = true;
+            document.getElementById('crash-screen').style.opacity = 1;
+            document.querySelectorAll('.hud-panel').forEach(p => p.classList.add('mode-dead'));
+            log("CRITICAL ERROR: EYE OVERLOAD", "curse");
+        }
+
+        function rebootSystem() {
+            isDead = false;
+            matiasmaLevel = 30;
+            document.getElementById('crash-screen').style.opacity = 0;
+            document.querySelectorAll('.hud-panel').forEach(p => p.classList.remove('mode-dead'));
+            log("SYSTEM REBOOT SUCCESSFUL", "sys");
+        }
+
+        function updateMeter() {
+            if(isDead) {
+                if(currentState === STATE.CLEANSE) {
+                    matiasmaLevel += CONFIG.heal * 0.5;
+                    if(matiasmaLevel > 20) rebootSystem();
+                }
+                return;
+            }
+
+            if(currentState === STATE.IDLE) matiasmaLevel -= CONFIG.decay;
+            else if (currentState === STATE.CURSED) matiasmaLevel -= CONFIG.curse;
+            else matiasmaLevel += CONFIG.heal;
+
+            if(matiasmaLevel <= 0) { matiasmaLevel = 0; triggerCrash(); }
+            if(matiasmaLevel >= 100) { 
+                if(matiasmaLevel < 100) { log("MAX PROTECTION!", "sys"); protectTimer = 60; }
+                matiasmaLevel = 100; 
+            }
+
+            document.getElementById('meter-fill').style.width = matiasmaLevel + "%";
+            
+            if(currentState === STATE.IDLE && !isDead && Math.random() < 0.005) {
+                log(IDLE_THREATS[Math.floor(Math.random()*IDLE_THREATS.length)], "curse");
+                matiasmaLevel -= 15;
+                document.getElementById('curse-pulse').style.opacity = 0.8;
+                setTimeout(() => document.getElementById('curse-pulse').style.opacity = 0, 200);
+            }
+        }
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x020213, 0.002);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+            camera.position.z = 150;
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); 
+            document.body.appendChild(renderer.domElement);
+
+            for(let i=0; i<14; i++) subEyeCenters.push(new THREE.Vector3((Math.random()-0.5)*180, (Math.random()-0.5)*120, (Math.random()-0.5)*50));
+            
+            createSky(); createEye(); createMirror();
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+            animate();
+            log("YIAYIA_OS v7.1 ONLINE", "sys");
+        }
+
+        function createSky() {
+            const geo = new THREE.BufferGeometry(); const pos = [];
+            for(let i=0; i<2000; i++) pos.push((Math.random()-0.5)*1800, (Math.random()-0.5)*1200, (Math.random()-0.5)*1000-200);
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            skySystem = new THREE.Points(geo, new THREE.PointsMaterial({ size: 4, map: getCircleSprite(), transparent: true, opacity: 0.6, color: 0xaaccff, blending: THREE.AdditiveBlending, depthWrite: false }));
+            scene.add(skySystem);
+        }
+
+        function createMirror() {
+            const shape = new THREE.Shape();
+            const w = 25, h = 40;
+            shape.moveTo(-w, -h); shape.lineTo(w, -h); shape.lineTo(w, h/2);
+            shape.absarc(0, h/2, w, 0, Math.PI, false); shape.lineTo(-w, -h);
+            const geometry = new THREE.ExtrudeGeometry(shape, { depth: 3, bevelEnabled: true });
+            const material = new THREE.MeshPhongMaterial({ color: 0x999999, emissive: 0x00ffff, transparent: true, opacity: 0 });
+            mirrorObj = new THREE.Mesh(geometry, material);
+            mirrorObj.rotation.x = Math.PI; scene.add(mirrorObj);
+            scene.add(new THREE.PointLight(0xffffff, 1, 500));
+        }
+
+        function createEye() {
+            const geo = new THREE.BufferGeometry();
+            const count = CONFIG.particleCount; 
+            eyePos = new Float32Array(count * 3); eyeBasePos = new Float32Array(count * 3);
+            eyeCol = new Float32Array(count * 3); eyeBaseCol = new Float32Array(count * 3);
+            eyeExplosionDir = new Float32Array(count * 3);
+
+            for (let i = 0; i < count; i++) {
+                const idx = i * 3; subEyeOffsets[i] = i % 14;
+                let r = Math.random() * 60, theta = Math.random() * Math.PI * 2;
+                let tx = r * Math.cos(theta), ty = r * Math.sin(theta), tz = (Math.random()-0.5) * (Math.sqrt(3600-r*r)*0.4);
+                eyePos[idx] = eyeBasePos[idx] = tx; eyePos[idx+1] = eyeBasePos[idx+1] = ty; eyePos[idx+2] = eyeBasePos[idx+2] = tz;
+                
+                let exPhi = Math.acos(2*Math.random()-1), exTheta = Math.random()*2*Math.PI;
+                eyeExplosionDir[idx] = Math.sin(exPhi)*Math.cos(exTheta); eyeExplosionDir[idx+1] = Math.sin(exPhi)*Math.sin(exTheta); eyeExplosionDir[idx+2] = Math.cos(exPhi);
+                
+                let c = new THREE.Color();
+                if (r < 11) c.set(0x000000); 
+                else if (r < 26) c.set(0x00ccff); 
+                else if (r < 40) c.set(0xeeffff); 
+                else c.set(0x001188); 
+                eyeCol[idx] = eyeBaseCol[idx] = c.r; eyeCol[idx+1] = eyeBaseCol[idx+1] = c.g; eyeCol[idx+2] = eyeBaseCol[idx+2] = c.b;
+            }
+            geo.setAttribute('position', new THREE.BufferAttribute(eyePos, 3));
+            geo.setAttribute('color', new THREE.BufferAttribute(eyeCol, 3));
+            eyeSystem = new THREE.Points(geo, new THREE.PointsMaterial({ size: 1.0, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+            scene.add(eyeSystem);
+        }
+
+        function updateUI() {
+            if(isDead) return;
+            const panels = document.querySelectorAll('.hud-panel');
+            const status = document.getElementById('status-text');
+            panels.forEach(p => p.classList.remove('mode-cursed', 'mode-protect', 'mode-cleanse'));
+
+            let txt = "MONITORING...";
+            if(currentState === STATE.CURSED) { panels.forEach(p => p.classList.add('mode-cursed')); txt = "!!! CURSE DETECTED !!!"; }
+            else if(currentState === STATE.PROTECT) { panels.forEach(p => p.classList.add('mode-protect')); txt = "SHIELDS ACTIVE"; }
+            else if(currentState === STATE.CLEANSE) { panels.forEach(p => p.classList.add('mode-cleanse')); txt = "PURIFYING..."; }
+            
+            status.innerText = txt;
+            document.querySelectorAll('.instruction-row').forEach(r => r.classList.remove('active'));
+            if(currentState !== STATE.IDLE) document.getElementById(`inst-${currentState}`).classList.add('active');
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updateMeter();
+            const time = Date.now() * 0.001;
+            const idlePulse = 1 + Math.sin(time * 2.5) * 0.04;
+            
+            curseFactor += ((currentState === STATE.CURSED ? 1 : 0) - curseFactor) * 0.15;
+            cleanseFactor += ((currentState === STATE.CLEANSE ? 1 : 0) - cleanseFactor) * 0.1;
+            mirrorFactor += ((currentState === STATE.MIRROR ? 1 : 0) - mirrorFactor) * 0.1;
+            protectFactor += ((currentState === STATE.PROTECT ? 1 : 0) - protectFactor) * 0.05;
+
+            // RED PULSE
+            document.getElementById('curse-pulse').style.opacity = Math.max(isDead ? 0.3 : 0, curseFactor * (0.3 + Math.sin(time*15)*0.3));
+            
+            // GOLD PULSE (Same logic as Red, but triggers on Protection or 100% meter)
+            const meterMaxPulse = protectTimer > 0 ? (protectTimer-- / 60) : 0;
+            const finalProtectFactor = Math.max(protectFactor, meterMaxPulse);
+            document.getElementById('protect-pulse').style.opacity = finalProtectFactor * (0.3 + Math.sin(time*15)*0.3);
+
+            if(!isDead) {
+                if (currentState === STATE.IDLE) {
+                    eyeSystem.rotation.y += (Math.sin(time * 0.5) * 0.8 - eyeSystem.rotation.y) * 0.02;
+                    eyeSystem.rotation.x += (Math.cos(time * 0.3) * 0.3 - eyeSystem.rotation.x) * 0.02;
+                } else {
+                    eyeSystem.rotation.y += (targetRotation.x - eyeSystem.rotation.y) * 0.1;
+                    eyeSystem.rotation.x += (targetRotation.y - eyeSystem.rotation.x) * 0.1;
+                }
+            }
+            
+            skySystem.position.x = -eyeSystem.rotation.y * 50; 
+            skySystem.position.y = -eyeSystem.rotation.x * 50;
+
+            if(mirrorFactor > 0.01) {
+                mirrorObj.visible = true; mirrorObj.material.opacity = mirrorFactor * 0.7;
+                mirrorObj.scale.set(mirrorFactor, mirrorFactor, mirrorFactor);
+                mirrorObj.position.set(targetRotation.x*30, targetRotation.y*30, 40);
+            } else mirrorObj.visible = false;
+
+            const pos = eyeSystem.geometry.attributes.position.array;
+            const col = eyeSystem.geometry.attributes.color.array;
+
+            for(let i=0; i<CONFIG.particleCount; i++) {
+                const idx = i*3; 
+                let tx = eyeBasePos[idx] * (currentState === STATE.IDLE ? idlePulse : 1);
+                let ty = eyeBasePos[idx+1] * (currentState === STATE.IDLE ? idlePulse : 1);
+                let tz = eyeBasePos[idx+2];
+                if(isDead) { tx += (Math.random()-0.5)*5; ty += (Math.random()-0.5)*5; }
+                const r = Math.sqrt(tx*tx + ty*ty);
+
+                if(curseFactor > 0.01) {
+                    const wave = Math.sin(r * 0.3 - time * 10) * 5 * curseFactor;
+                    tx += (tx/r||0) * wave; ty += (ty/r||0) * wave;
+                }
+                if(cleanseFactor > 0.01) {
+                    tx += eyeExplosionDir[idx] * cleanseFactor * 140;
+                    ty += eyeExplosionDir[idx+1] * cleanseFactor * 140;
+                    tz += eyeExplosionDir[idx+2] * cleanseFactor * 140;
+                }
+                if(protectFactor > 0.01) {
+                    const c = subEyeCenters[subEyeOffsets[i]];
+                    tx = tx*(1-protectFactor) + (c.x + tx*0.15)*protectFactor;
+                    ty = ty*(1-protectFactor) + (c.y + ty*0.15)*protectFactor;
+                }
+                pos[idx] += (tx - pos[idx]) * 0.15; pos[idx+1] += (ty - pos[idx+1]) * 0.15; pos[idx+2] += (tz - pos[idx+2]) * 0.15;
+                
+                // NO MORE GOLD COLOR CHANGE HERE - Keeping original colors
+                if (r < 11) {
+                    const blink = currentState === STATE.CURSED ? (Math.random() > 0.4 ? 1 : 0) : (Math.sin(time*5) > 0.9 ? 0.7 : 0);
+                    col[idx] = blink; col[idx+1] = 0; col[idx+2] = 0;
+                }
+            }
+            eyeSystem.geometry.attributes.position.needsUpdate = true;
+            eyeSystem.geometry.attributes.color.needsUpdate = true;
+
+            if(currentState === STATE.CURSED && Math.random() < 0.05 && !isDead) log(LOGS.CURSE[Math.floor(Math.random()*LOGS.CURSE.length)], 'curse');
+            renderer.render(scene, camera);
+        }
+
+        function onResults(results) {
+            if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) { 
+                if(currentState !== STATE.IDLE && !isDead) { currentState = STATE.IDLE; updateUI(); }
+                return; 
+            }
+            const lm = results.multiHandLandmarks[0];
+            targetRotation.x = (lm[9].x - 0.5) * -2.5; targetRotation.y = (lm[9].y - 0.5) * -1.5;
+            const pinch = Math.hypot(lm[8].x-lm[4].x, lm[8].y-lm[4].y), spread = Math.hypot(lm[8].x-lm[20].x, lm[8].y-lm[20].y);
+            const isThumbUp = (lm[4].y < lm[3].y) && (lm[8].y > lm[5].y) && (lm[12].y > lm[5].y);
+            let ns = STATE.IDLE;
+            if(isDead) { if(spread > 0.25) ns = STATE.CLEANSE; else ns = STATE.IDLE; } 
+            else {
+                if(isThumbUp) ns = STATE.PROTECT;
+                else if(pinch < 0.05) ns = STATE.CURSED;
+                else if(spread > 0.25) ns = STATE.CLEANSE;
+                else if(spread < 0.18 && Math.hypot(lm[8].x-lm[12].x, lm[8].y-lm[12].y) < 0.06) ns = STATE.MIRROR;
+            }
+            if(ns !== currentState) { currentState = ns; updateUI(); }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if(e.key.toLowerCase() === 'h') {
+                const win = document.getElementById('hidden-settings');
+                win.style.display = win.style.display === 'block' ? 'none' : 'block';
+            }
+        });
+        document.getElementById('p-decay').oninput = (e) => CONFIG.decay = parseFloat(e.target.value);
+        document.getElementById('p-heal').oninput = (e) => CONFIG.heal = parseFloat(e.target.value);
+
+        const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6 });
+        hands.onResults(onResults);
+        new Camera(document.getElementById('input_video'), { onFrame: async () => { await hands.send({image: document.getElementById('input_video')}); }, width: 640, height: 480 }).start();
+        init();
+    </script>
+</body>
+</html>
